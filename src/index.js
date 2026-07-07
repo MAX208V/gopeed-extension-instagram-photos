@@ -27,17 +27,22 @@ gopeed.events.onResolve(async function(ctx) {
     var item = items[i];
     var username = item.username || primaryUser;
     var suffix = items.length > 1 ? '_' + (i + 1) : '';
-    var best = pickBest(item.images);
-    if (best && best.url) {
-      files.push({
-        name: username + '_' + shortcode + suffix + '.jpg',
-        req: { url: best.url }
-      });
+    if (item.images && item.images.length > 0) {
+      var best = pickBest(item.images);
+      if (best && best.url) {
+        files.push({ name: username + '_' + shortcode + suffix + '.jpg', req: { url: best.url } });
+      }
+    }
+    if (item.videos && item.videos.length > 0) {
+      var best = pickBest(item.videos);
+      if (best && best.url) {
+        files.push({ name: username + '_' + shortcode + suffix + '.mp4', req: { url: best.url } });
+      }
     }
   }
 
   if (files.length === 0) {
-    throw new Error('No downloadable images found');
+    throw new Error('No downloadable media found');
   }
 
   ctx.res = {
@@ -86,7 +91,7 @@ async function fetchMedia(url, settings) {
   }
 
   var result = [];
-  findImages(data, result);
+  findMedia(data, result);
   return result;
 }
 
@@ -96,7 +101,7 @@ function extractData(html) {
   var m;
   while ((m = re.exec(html)) !== null) {
     var c = m[1];
-    if (c.length > 500 && (c.indexOf('image_versions2') !== -1 || c.indexOf('carousel_media') !== -1)) {
+    if (c.length > 500 && (c.indexOf('image_versions2') !== -1 || c.indexOf('carousel_media') !== -1 || c.indexOf('video_versions') !== -1)) {
       scripts.push(c);
     }
   }
@@ -132,28 +137,47 @@ function extractData(html) {
   return null;
 }
 
-function findImages(obj, result, inheritedUser) {
+function findMedia(obj, result, inheritedUser) {
   if (!obj || typeof obj !== 'object') return;
   var user = inheritedUser || '';
   if (obj.user && obj.user.username) user = obj.user.username;
 
+  // Single video post
+  if (obj.video_versions && Array.isArray(obj.video_versions)) {
+    var entry = { username: user, images: [], videos: mapVersions(obj.video_versions) };
+    if (obj.image_versions2 && obj.image_versions2.candidates) {
+      entry.images = mapCandidates(obj.image_versions2.candidates);
+    }
+    result.push(entry);
+    return;
+  }
+
+  // Carousel: mix of images and videos
   if (obj.carousel_media && Array.isArray(obj.carousel_media)) {
     for (var i = 0; i < obj.carousel_media.length; i++) {
       var cm = obj.carousel_media[i];
+      var entry = { username: user, images: [], videos: [] };
+      if (cm.video_versions && Array.isArray(cm.video_versions)) {
+        entry.videos = mapVersions(cm.video_versions);
+      }
       if (cm.image_versions2 && cm.image_versions2.candidates) {
-        result.push({ username: user, images: mapCandidates(cm.image_versions2.candidates) });
+        entry.images = mapCandidates(cm.image_versions2.candidates);
+      }
+      if (entry.images.length > 0 || entry.videos.length > 0) {
+        result.push(entry);
       }
     }
     return;
   }
 
+  // Single image post
   if (obj.image_versions2 && obj.image_versions2.candidates && obj.image_versions2.candidates.length > 0) {
-    result.push({ username: user, images: mapCandidates(obj.image_versions2.candidates) });
+    result.push({ username: user, images: mapCandidates(obj.image_versions2.candidates), videos: [] });
     return;
   }
 
   if (Array.isArray(obj)) {
-    for (var i = 0; i < obj.length; i++) findImages(obj[i], result, user);
+    for (var i = 0; i < obj.length; i++) findMedia(obj[i], result, user);
   } else {
     var keys = Object.keys(obj);
     for (var i = 0; i < keys.length; i++) {
@@ -161,7 +185,7 @@ function findImages(obj, result, inheritedUser) {
       if (key === '__typename' || key === 'config' || key === 'display_url') continue;
       var val = obj[key];
       if (Array.isArray(val) && val.length > 200) continue;
-      findImages(val, result, user);
+      findMedia(val, result, user);
     }
   }
 }
@@ -170,6 +194,14 @@ function mapCandidates(candidates) {
   var result = [];
   for (var i = 0; i < candidates.length; i++) {
     result.push({ url: candidates[i].url, width: candidates[i].width || 0, height: candidates[i].height || 0 });
+  }
+  return result;
+}
+
+function mapVersions(versions) {
+  var result = [];
+  for (var i = 0; i < versions.length; i++) {
+    result.push({ url: versions[i].url, width: versions[i].width || 0, height: versions[i].height || 0 });
   }
   return result;
 }
