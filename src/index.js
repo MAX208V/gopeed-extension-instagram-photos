@@ -4,6 +4,9 @@ gopeed.events.onResolve(async (ctx) => {
   const url = ctx.req.url;
   const settings = gopeed.settings;
 
+  // Set browser fingerprint for Instagram CDN compatibility
+  __gopeed_setFingerprint('chrome');
+
   const shortcode = parser.extractShortcode(url);
   if (!shortcode) {
     throw new Error('Invalid Instagram URL. Could not extract shortcode.');
@@ -30,6 +33,10 @@ gopeed.events.onResolve(async (ctx) => {
           name: `${username}_${shortcode}${suffix}.jpg`,
           req: {
             url: bestImage.url,
+            headers: {
+              'Referer': 'https://www.instagram.com/',
+              'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1',
+            },
           },
         });
       }
