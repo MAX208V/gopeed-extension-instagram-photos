@@ -3,7 +3,7 @@
   "author": "MAX208V",
   "title": "Instagram Photo Downloader",
   "description": "Download photos from Instagram posts.",
-  "icon": "./icons/instagram.png",
+  "icon": "icon.png",
   "version": "1.0.0",
   "homepage": "https://github.com/MAX208V/gopeed-extension-instagram-photos",
   "repository": {
@@ -17,7 +17,11 @@
           "*://www.instagram.com/p/*",
           "*://instagram.com/p/*",
           "*://www.instagram.com/*/p/*",
-          "*://instagram.com/*/p/*"
+          "*://instagram.com/*/p/*",
+          "*://www.instagram.com/reel/*",
+          "*://instagram.com/reel/*",
+          "*://www.instagram.com/reels/*",
+          "*://instagram.com/reels/*"
         ]
       },
       "entry": "dist/index.js"
@@ -25,56 +29,9 @@
   ],
   "settings": [
     {
-      "name": "proxyType",
-      "title": "Proxy Type",
-      "description": "Select proxy protocol (none, http, or socks5)",
-      "type": "string",
-      "value": "none",
-      "options": [
-        { "label": "None", "value": "none" },
-        { "label": "HTTP", "value": "http" },
-        { "label": "SOCKS5", "value": "socks5" }
-      ]
-    },
-    {
-      "name": "proxyHost",
-      "title": "Proxy Host",
-      "description": "Proxy server hostname or IP address",
-      "type": "string",
-      "value": ""
-    },
-    {
-      "name": "proxyPort",
-      "title": "Proxy Port",
-      "description": "Proxy server port number",
-      "type": "string",
-      "value": ""
-    },
-    {
-      "name": "proxyUsername",
-      "title": "Proxy Username",
-      "description": "Username for proxy authentication (optional)",
-      "type": "string",
-      "value": ""
-    },
-    {
-      "name": "proxyPassword",
-      "title": "Proxy Password",
-      "description": "Password for proxy authentication (optional)",
-      "type": "string",
-      "value": ""
-    },
-    {
-      "name": "preferOriginal",
-      "title": "Prefer Original Quality",
-      "description": "When enabled, attempts to get the highest quality image available",
-      "type": "boolean",
-      "value": true
-    },
-    {
       "name": "cookie",
-      "title": "Instagram Session Cookie",
-      "description": "Paste your instagram.com session cookie here to access private/posts (open browser devtools → Application → Cookies → instagram.com → copy sessionid)",
+      "title": "Session Cookie",
+      "description": "Instagram session cookie for accessing private/locked posts. Copy from browser DevTools.",
       "type": "string",
       "value": ""
     }
