@@ -15,7 +15,6 @@ gopeed.events.onResolve(async (ctx) => {
   const primaryUsername = mediaItems.find(item => item.username)?.username || 'instagram';
 
   const files = [];
-  let imageCounter = 0;
 
   for (let i = 0; i < mediaItems.length; i++) {
     const item = mediaItems[i];
@@ -26,8 +25,7 @@ gopeed.events.onResolve(async (ctx) => {
     // Download images if available
     if (item.images && item.images.length > 0) {
       const bestImage = parser.getBestImage(item.images);
-      if (bestImage) {
-        imageCounter++;
+      if (bestImage && bestImage.url) {
         files.push({
           name: `${username}_${shortcode}${suffix}.jpg`,
           req: {
@@ -36,12 +34,15 @@ gopeed.events.onResolve(async (ctx) => {
         });
       }
     }
-
-    // Photos extension: skip videos
   }
 
   if (files.length === 0) {
-    throw new Error('No downloadable images found in this post');
+    // If no images found but there are videos, show a clearer error
+    const hasVideos = mediaItems.some(item => item.videos && item.videos.length > 0);
+    if (hasVideos) {
+      throw new Error('This post contains only videos, no downloadable images found.');
+    }
+    throw new Error('No downloadable images found in this post.');
   }
 
   ctx.res = {

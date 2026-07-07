@@ -74,27 +74,83 @@ export async function fetchPostData(url, settings) {
   let scriptContent = null;
   let jsonStr = null;
 
-  // Pattern 1: Look for ScheduledServerJS with RelayPrefetchedStreamCache
+  // Pattern 1: Find script tags containing media data (image_versions2 or carousel_media)
+  // These are typically <script type="application/json" data-content-len="..." data-sjs>
+  // with a {"require":[...]} structure containing RelayPrefetchedStreamCache
   const scriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
   let match;
+  let bestMatch = null;
+  let bestMatchLen = 0;
+
   while ((match = scriptRegex.exec(html)) !== null) {
     const content = match[1];
-    if (content.includes('ScheduledServerJS') && content.includes('RelayPrefetchedStreamCache')) {
-      scriptContent = content;
-      break;
+    // Look for the script that contains the actual media data
+    // (contains ScheduledServerJS AND has image_versions2 or carousel_media)
+    if (content.includes('ScheduledServerJS')) {
+      if (content.includes('image_versions2') || content.includes('carousel_media')) {
+        // Prefer the one with the most content (likely has the full data)
+        if (content.length > bestMatchLen) {
+          bestMatch = content;
+          bestMatchLen = content.length;
+        }
+      }
     }
   }
 
-  if (scriptContent) {
-    const jsonStart = scriptContent.indexOf('{');
-    const jsonEnd = scriptContent.lastIndexOf('}');
-    if (jsonStart !== -1 && jsonEnd !== -1) {
-      jsonStr = scriptContent.substring(jsonStart, jsonEnd + 1);
+  if (bestMatch) {
+    // Navigate through the nested structure to find the actual media data
+    // Structure: {"require":[["ScheduledServerJS","handle",null,[{"__bbox":{"require":[["RelayPrefetchedStreamCache","next",[],[...]],...]}},...]]]}
+    try {
+      const outerData = JSON.parse(bestMatch);
+      if (outerData.require && outerData.require[0] && outerData.require[0][3]) {
+        const bboxItems = outerData.require[0][3];
+        for (const bboxItem of bboxItems) {
+          if (bboxItem && bboxItem.__bbox && bboxItem.__bbox.require) {
+            for (const req of bboxItem.__bbox.require) {
+              if (Array.isArray(req) && req[0] === 'RelayPrefetchedStreamCache' && req[3]) {
+                // req[3] contains the actual data with media items
+                jsonStr = JSON.stringify(req[3]);
+                break;
+              }
+            }
+          }
+          if (jsonStr) break;
+        }
+      }
+    } catch (e) {
+      // Fallback to old method
+      const jsonStart = bestMatch.indexOf('{');
+      const jsonEnd = bestMatch.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd !== -1) {
+        jsonStr = bestMatch.substring(jsonStart, jsonEnd + 1);
+      }
     }
   }
 
-  // Pattern 2: Fallback - try to find xdt_shortcode_media in __NEXT_DATA__
+  // Pattern 2: Fallback - look for image_versions2 directly in any script tag
   if (!jsonStr) {
+    scriptRegex.lastIndex = 0;
+    while ((match = scriptRegex.exec(html)) !== null) {
+      const content = match[1];
+      if (content.includes('image_versions2') || content.includes('carousel_media')) {
+        if (content.length > (bestMatchLen || 0)) {
+          bestMatch = content;
+          bestMatchLen = content.length;
+        }
+      }
+    }
+    if (bestMatch) {
+      const jsonStart = bestMatch.indexOf('{');
+      const jsonEnd = bestMatch.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd !== -1) {
+        jsonStr = bestMatch.substring(jsonStart, jsonEnd + 1);
+      }
+    }
+  }
+
+  // Pattern 3: Fallback to __NEXT_DATA__
+  if (!jsonStr) {
+    scriptRegex.lastIndex = 0;
     while ((match = scriptRegex.exec(html)) !== null) {
       const content = match[1];
       if (content.includes('__NEXT_DATA__')) {
@@ -108,8 +164,9 @@ export async function fetchPostData(url, settings) {
     }
   }
 
-  // Pattern 3: Fallback to window.__INITIAL_STATE__
+  // Pattern 4: Fallback to window.__INITIAL_STATE__
   if (!jsonStr) {
+    scriptRegex.lastIndex = 0;
     while ((match = scriptRegex.exec(html)) !== null) {
       const content = match[1];
       if (content.includes('window.__INITIAL_STATE__')) {
@@ -133,66 +190,66 @@ export async function fetchPostData(url, settings) {
 
   const mediaItems = [];
 
-  const searchForMedia = (obj) => {
+  // Collect usernames found at higher levels as fallback
+  let fallbackUsername = '';
+
+  const searchForMedia = (obj, inheritedUser) => {
     if (!obj || typeof obj !== 'object') return;
+
+    // Track user info from higher-level objects
+    const objUser = obj.user?.username || inheritedUser || fallbackUsername;
+    if (obj.user?.username) {
+      fallbackUsername = obj.user.username;
+    }
 
     // Check for single video (reel)
     if (obj.video_versions && Array.isArray(obj.video_versions)) {
       const item = {
         id: obj.pk || obj.id || '',
         code: obj.code || '',
-        username: obj.user?.username || '',
+        username: objUser,
         videos: obj.video_versions.map((v) => ({
           url: v.url,
-          width: v.width,
-          height: v.height,
-          type: v.type,
+          width: v.width || 0,
+          height: v.height || 0,
         })),
         images: [],
-        caption: obj.caption?.text || '',
         mediaType: 'video',
       };
-
       if (obj.image_versions2?.candidates) {
         item.images = obj.image_versions2.candidates.map((c) => ({
           url: c.url,
-          width: c.width,
-          height: c.height,
+          width: c.width || c.w || 0,
+          height: c.height || c.h || 0,
         }));
       }
-
       mediaItems.push(item);
       return;
     }
 
-    // Check for single image (photo)
+    // Check for single image (photo) - only if no carousel_media
     if (obj.image_versions2?.candidates && !obj.video_versions && !obj.carousel_media) {
       mediaItems.push({
         id: obj.pk || obj.id || '',
         code: obj.code || '',
-        username: obj.user?.username || '',
+        username: objUser,
         videos: [],
         images: obj.image_versions2.candidates.map((c) => ({
           url: c.url,
-          width: c.width,
-          height: c.height,
+          width: c.width || c.w || 0,
+          height: c.height || c.h || 0,
         })),
-        caption: obj.caption?.text || '',
         mediaType: 'image',
       });
       return;
     }
 
     // Handle carousel_media (multi-image/video posts)
-    // Attach parent user info to carousel items if they lack it
     if (obj.carousel_media && Array.isArray(obj.carousel_media)) {
-      const parentUser = obj.user;
       for (const item of obj.carousel_media) {
-        // Inherit parent user if carousel item doesn't have its own
-        if (!item.user && parentUser) {
-          item.user = parentUser;
-        }
-        searchForMedia(item);
+        // Inherit username from parent if carousel item doesn't have its own
+        const carouselUser = item.user?.username || objUser;
+        searchForMedia(item, carouselUser);
       }
       return;
     }
@@ -200,7 +257,7 @@ export async function fetchPostData(url, settings) {
     // Recursively search arrays
     if (Array.isArray(obj)) {
       for (const item of obj) {
-        searchForMedia(item);
+        searchForMedia(item, objUser);
       }
       return;
     }
@@ -209,7 +266,7 @@ export async function fetchPostData(url, settings) {
     for (const key of Object.keys(obj)) {
       // Skip common large non-relevant fields for performance
       if (key === '__typename' || key === 'config' || key === 'display_url') continue;
-      searchForMedia(obj[key]);
+      searchForMedia(obj[key], objUser);
     }
   };
 
@@ -226,8 +283,14 @@ export function extractShortcode(url) {
   // Strip query parameters first
   const cleanUrl = url.split('?')[0];
   const patterns = [
-    /instagram\.com\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/,
-    /instagr\.am\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/,
+    // Match: instagram.com/p/CODE, instagram.com/reel/CODE, etc.
+    /instagram\.com\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i,
+    // Match: instagram.com/username/p/CODE (with profile name prefix)
+    /instagram\.com\/[A-Za-z0-9_.]+\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i,
+    // Match shortened: instagr.am/p/CODE
+    /instagr\.am\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i,
+    // Match: instagram.com/p/CODE?params
+    /instagram\.com\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i,
   ];
 
   for (const pattern of patterns) {
@@ -241,12 +304,15 @@ export function extractShortcode(url) {
 
 export function getBestImage(images) {
   if (!images || images.length === 0) return null;
+  // Instagram now returns candidates without width/height in some cases
   // Sort by resolution (width * height) descending, pick the highest
-  return images.reduce((best, current) => {
+  // If all have 0 dimensions, pick the first one (usually highest quality)
+  const sorted = images.reduce((best, current) => {
     const bestPixels = (best.width || 0) * (best.height || 0);
     const currentPixels = (current.width || 0) * (current.height || 0);
     return currentPixels > bestPixels ? current : best;
   });
+  return sorted;
 }
 
 export function getBestVideo(videos) {
