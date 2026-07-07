@@ -15,7 +15,9 @@
       "match": {
         "urls": [
           "*://www.instagram.com/p/*",
-          "*://instagram.com/p/*"
+          "*://instagram.com/p/*",
+          "*://www.instagram.com/*/p/*",
+          "*://instagram.com/*/p/*"
         ]
       },
       "entry": "dist/index.js"
