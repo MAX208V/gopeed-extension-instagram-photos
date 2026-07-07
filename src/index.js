@@ -27,16 +27,17 @@ gopeed.events.onResolve(async function(ctx) {
     var item = items[i];
     var username = item.username || primaryUser;
     var suffix = items.length > 1 ? '_' + (i + 1) : '';
+    var titlePart = item.title ? '_' + sanitizeTitle(item.title) : '';
     if (item.images && item.images.length > 0) {
       var best = pickBest(item.images);
       if (best && best.url) {
-        files.push({ name: username + '_' + shortcode + suffix + '.jpg', req: { url: best.url } });
+        files.push({ name: username + '_' + shortcode + titlePart + suffix + '.jpg', req: { url: best.url } });
       }
     }
     if (item.videos && item.videos.length > 0) {
       var best = pickBest(item.videos);
       if (best && best.url) {
-        files.push({ name: username + '_' + shortcode + suffix + '.mp4', req: { url: best.url } });
+        files.push({ name: username + '_' + shortcode + titlePart + suffix + '.mp4', req: { url: best.url } });
       }
     }
   }
@@ -142,12 +143,17 @@ function findMedia(obj, result, inheritedUser) {
   var user = inheritedUser || '';
   if (obj.user && obj.user.username) user = obj.user.username;
 
+  // Capture caption from post
+  var caption = '';
+  if (obj.caption && obj.caption.text) caption = obj.caption.text;
+
   // Single video post
   if (obj.video_versions && Array.isArray(obj.video_versions)) {
-    var entry = { username: user, images: [], videos: mapVersions(obj.video_versions) };
+    var entry = { username: user, title: caption, images: [], videos: mapVersions(obj.video_versions) };
     if (obj.image_versions2 && obj.image_versions2.candidates) {
       entry.images = mapCandidates(obj.image_versions2.candidates);
     }
+    if (!entry.title) entry.title = caption;
     result.push(entry);
     return;
   }
@@ -156,7 +162,7 @@ function findMedia(obj, result, inheritedUser) {
   if (obj.carousel_media && Array.isArray(obj.carousel_media)) {
     for (var i = 0; i < obj.carousel_media.length; i++) {
       var cm = obj.carousel_media[i];
-      var entry = { username: user, images: [], videos: [] };
+      var entry = { username: user, title: caption, images: [], videos: [] };
       if (cm.video_versions && Array.isArray(cm.video_versions)) {
         entry.videos = mapVersions(cm.video_versions);
       }
@@ -172,7 +178,7 @@ function findMedia(obj, result, inheritedUser) {
 
   // Single image post
   if (obj.image_versions2 && obj.image_versions2.candidates && obj.image_versions2.candidates.length > 0) {
-    result.push({ username: user, images: mapCandidates(obj.image_versions2.candidates), videos: [] });
+    result.push({ username: user, title: caption, images: mapCandidates(obj.image_versions2.candidates), videos: [] });
     return;
   }
 
@@ -196,6 +202,13 @@ function mapCandidates(candidates) {
     result.push({ url: candidates[i].url, width: candidates[i].width || 0, height: candidates[i].height || 0 });
   }
   return result;
+}
+
+function sanitizeTitle(text) {
+  if (!text) return '';
+  var t = text.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  if (t.length > 50) t = t.substring(0, 50).replace(/_+[^_]*$/, '');
+  return t;
 }
 
 function mapVersions(versions) {

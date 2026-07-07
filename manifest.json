@@ -17,7 +17,15 @@
           "*://www.instagram.com/p/*",
           "*://instagram.com/p/*",
           "*://www.instagram.com/*/p/*",
-          "*://instagram.com/*/p/*"
+          "*://instagram.com/*/p/*",
+          "*://www.instagram.com/reel/*",
+          "*://instagram.com/reel/*",
+          "*://www.instagram.com/*/reel/*",
+          "*://instagram.com/*/reel/*",
+          "*://www.instagram.com/reels/*",
+          "*://instagram.com/reels/*",
+          "*://www.instagram.com/*/reels/*",
+          "*://instagram.com/*/reels/*"
         ]
       },
       "entry": "dist/index.js"
