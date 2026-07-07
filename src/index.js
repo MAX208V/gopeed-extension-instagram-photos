@@ -23,23 +23,32 @@ gopeed.events.onResolve(async function(ctx) {
   }
 
   var files = [];
+  var imgIdx = 0;
+  var vidIdx = 0;
   for (var i = 0; i < items.length; i++) {
     var item = items[i];
     var username = item.username || primaryUser;
-    var suffix = items.length > 1 ? '_' + (i + 1) : '';
     var titlePart = item.title ? '_' + sanitizeTitle(item.title) : '';
     if (item.images && item.images.length > 0) {
       var best = pickBest(item.images);
       if (best && best.url) {
+        imgIdx++;
+        var suffix = '_' + pad2(imgIdx);
         files.push({ name: username + '_' + shortcode + titlePart + suffix + '.jpg', req: { url: best.url, headers: { 'Referer': 'https://www.instagram.com/' } } });
       }
     }
     if (item.videos && item.videos.length > 0) {
       var best = pickBest(item.videos);
       if (best && best.url) {
+        vidIdx++;
+        var suffix = '_' + pad2(vidIdx);
         files.push({ name: username + '_' + shortcode + titlePart + suffix + '.mp4', req: { url: best.url } });
       }
     }
+  }
+  if (files.length === 1) {
+    // Single file: strip the _01 suffix
+    files[0].name = files[0].name.replace(/_\d{2}(\.\w+)$/, '$1');
   }
 
   if (files.length === 0) {
@@ -147,7 +156,48 @@ function findMedia(obj, result, inheritedUser) {
   var caption = '';
   if (obj.caption && obj.caption.text) caption = obj.caption.text;
 
-  // Single video post
+  // Priority 1: Carousel (multiple images/videos) — must be checked BEFORE
+  // single image/video, because carousel posts also have image_versions2
+  // at the parent level as a cover thumbnail, which would shadow carousel_media.
+  // Also support GraphQL edge_sidecar_to_children format.
+  var carousel = null;
+  if (obj.carousel_media && Array.isArray(obj.carousel_media)) {
+    carousel = obj.carousel_media;
+  } else if (obj.edge_sidecar_to_children && Array.isArray(obj.edge_sidecar_to_children.edges)) {
+    carousel = [];
+    for (var i = 0; i < obj.edge_sidecar_to_children.edges.length; i++) {
+      var e = obj.edge_sidecar_to_children.edges[i];
+      if (e && e.node) carousel.push(e.node);
+    }
+  }
+  if (carousel) {
+    for (var i = 0; i < carousel.length; i++) {
+      var cm = carousel[i];
+      var entry = { username: user, title: caption, images: [], videos: [] };
+      if (cm.video_versions && Array.isArray(cm.video_versions)) {
+        entry.videos = mapVersions(cm.video_versions);
+      }
+      if (cm.image_versions2 && cm.image_versions2.candidates) {
+        entry.images = mapCandidates(cm.image_versions2.candidates);
+      }
+      // GraphQL: display_resources / display_url fallback
+      if (entry.images.length === 0 && entry.videos.length === 0) {
+        if (cm.display_resources && Array.isArray(cm.display_resources)) {
+          entry.images = cm.display_resources.map(function(r) {
+            return { url: r.src || r.url, width: r.config_width || 0, height: r.config_height || 0 };
+          });
+        } else if (cm.display_url) {
+          entry.images = [{ url: cm.display_url, width: 0, height: 0 }];
+        }
+      }
+      if (entry.images.length > 0 || entry.videos.length > 0) {
+        result.push(entry);
+      }
+    }
+    return;
+  }
+
+  // Priority 2: Single video (only when not part of a carousel)
   if (obj.video_versions && Array.isArray(obj.video_versions)) {
     var entry = { username: user, title: caption, images: [], videos: mapVersions(obj.video_versions) };
     if (obj.image_versions2 && obj.image_versions2.candidates) {
@@ -158,25 +208,7 @@ function findMedia(obj, result, inheritedUser) {
     return;
   }
 
-  // Carousel: mix of images and videos
-  if (obj.carousel_media && Array.isArray(obj.carousel_media)) {
-    for (var i = 0; i < obj.carousel_media.length; i++) {
-      var cm = obj.carousel_media[i];
-      var entry = { username: user, title: caption, images: [], videos: [] };
-      if (cm.video_versions && Array.isArray(cm.video_versions)) {
-        entry.videos = mapVersions(cm.video_versions);
-      }
-      if (cm.image_versions2 && cm.image_versions2.candidates) {
-        entry.images = mapCandidates(cm.image_versions2.candidates);
-      }
-      if (entry.images.length > 0 || entry.videos.length > 0) {
-        result.push(entry);
-      }
-    }
-    return;
-  }
-
-  // Single image post
+  // Priority 3: Single image (lowest priority — carousel/video already handled)
   if (obj.image_versions2 && obj.image_versions2.candidates && obj.image_versions2.candidates.length > 0) {
     result.push({ username: user, title: caption, images: mapCandidates(obj.image_versions2.candidates), videos: [] });
     return;
@@ -217,4 +249,8 @@ function mapVersions(versions) {
     result.push({ url: versions[i].url, width: versions[i].width || 0, height: versions[i].height || 0 });
   }
   return result;
+}
+
+function pad2(n) {
+  return n < 10 ? '0' + n : '' + n;
 }
