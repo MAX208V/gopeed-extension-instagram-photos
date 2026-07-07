@@ -10,17 +10,24 @@ gopeed.events.onResolve(async (ctx) => {
   }
 
   const mediaItems = await parser.fetchPostData(url, settings);
+
+  // Determine the primary username from the first item with a username
+  const primaryUsername = mediaItems.find(item => item.username)?.username || 'instagram';
+
   const files = [];
+  let imageCounter = 0;
 
   for (let i = 0; i < mediaItems.length; i++) {
     const item = mediaItems[i];
-    const username = item.username || 'instagram';
+    // Use item's own username, fall back to primary username, then 'instagram'
+    const username = item.username || primaryUsername;
     const suffix = mediaItems.length > 1 ? `_${i + 1}` : '';
 
     // Download images if available
     if (item.images && item.images.length > 0) {
       const bestImage = parser.getBestImage(item.images);
       if (bestImage) {
+        imageCounter++;
         files.push({
           name: `${username}_${shortcode}${suffix}.jpg`,
           req: {
@@ -30,8 +37,7 @@ gopeed.events.onResolve(async (ctx) => {
       }
     }
 
-    // Also download video if this is a video post (for mixed carousels)
-    // Photos extension only: skip videos by default
+    // Photos extension: skip videos
   }
 
   if (files.length === 0) {

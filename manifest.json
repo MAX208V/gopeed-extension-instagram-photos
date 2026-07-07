@@ -68,6 +68,13 @@
       "description": "When enabled, attempts to get the highest quality image available",
       "type": "boolean",
       "value": true
+    },
+    {
+      "name": "cookie",
+      "title": "Instagram Session Cookie",
+      "description": "Paste your instagram.com session cookie here to access private/posts (open browser devtools → Application → Cookies → instagram.com → copy sessionid)",
+      "type": "string",
+      "value": ""
     }
   ]
 }

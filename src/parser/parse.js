@@ -44,8 +44,13 @@ export function buildProxyUrl(settings) {
 
 export function getFetchOptions(settings) {
   const options = {
-    headers: INSTAGRAM_HEADERS,
+    headers: { ...INSTAGRAM_HEADERS },
   };
+
+  // Add cookie if provided
+  if (settings.cookie) {
+    options.headers.cookie = settings.cookie;
+  }
 
   const proxyUrl = buildProxyUrl(settings);
   if (proxyUrl) {
@@ -179,8 +184,14 @@ export async function fetchPostData(url, settings) {
     }
 
     // Handle carousel_media (multi-image/video posts)
+    // Attach parent user info to carousel items if they lack it
     if (obj.carousel_media && Array.isArray(obj.carousel_media)) {
+      const parentUser = obj.user;
       for (const item of obj.carousel_media) {
+        // Inherit parent user if carousel item doesn't have its own
+        if (!item.user && parentUser) {
+          item.user = parentUser;
+        }
         searchForMedia(item);
       }
       return;
