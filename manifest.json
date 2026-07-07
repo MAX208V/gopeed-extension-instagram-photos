@@ -20,7 +20,7 @@
           "*://instagram.com/*/p/*"
         ]
       },
-      "entry": "index.js"
+      "entry": "dist/index.js"
     }
   ],
   "settings": [
