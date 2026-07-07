@@ -31,7 +31,7 @@ gopeed.events.onResolve(async function(ctx) {
     if (item.images && item.images.length > 0) {
       var best = pickBest(item.images);
       if (best && best.url) {
-        files.push({ name: username + '_' + shortcode + titlePart + suffix + '.jpg', req: { url: best.url } });
+        files.push({ name: username + '_' + shortcode + titlePart + suffix + '.jpg', req: { url: best.url, headers: { 'Referer': 'https://www.instagram.com/' } } });
       }
     }
     if (item.videos && item.videos.length > 0) {
