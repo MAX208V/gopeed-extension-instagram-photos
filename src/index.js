@@ -33,22 +33,33 @@ gopeed.events.onResolve(async function(ctx) {
       var best = pickBest(item.images);
       if (best && best.url) {
         imgIdx++;
-        var suffix = '_' + pad2(imgIdx);
-        files.push({ name: username + '_' + shortcode + titlePart + suffix + '.jpg', req: { url: best.url, headers: { 'Referer': 'https://www.instagram.com/' } } });
+        // Serial number BEFORE title, so it's always visible in UI
+        files.push({
+          name: username + '_' + shortcode + '_' + pad2(imgIdx) + titlePart + '.jpg',
+          req: {
+            url: best.url,
+            headers: {
+              'Referer': 'https://www.instagram.com/',
+              'Range': 'bytes=0-'
+            }
+          }
+        });
       }
     }
     if (item.videos && item.videos.length > 0) {
       var best = pickBest(item.videos);
       if (best && best.url) {
         vidIdx++;
-        var suffix = '_' + pad2(vidIdx);
-        files.push({ name: username + '_' + shortcode + titlePart + suffix + '.mp4', req: { url: best.url } });
+        files.push({
+          name: username + '_' + shortcode + '_' + pad2(vidIdx) + titlePart + '.mp4',
+          req: { url: best.url }
+        });
       }
     }
   }
   if (files.length === 1) {
-    // Single file: strip the _01 suffix
-    files[0].name = files[0].name.replace(/_\d{2}(\.\w+)$/, '$1');
+    // Single file: strip the _XX suffix (wherever it appears)
+    files[0].name = files[0].name.replace(/_\d{2}(_|\.)/, function(m) { return m.slice(-1); });
   }
 
   if (files.length === 0) {
