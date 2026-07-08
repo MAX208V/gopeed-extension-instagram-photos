@@ -33,8 +33,9 @@ gopeed.events.onResolve(async function(ctx) {
       var best = pickBest(item.images);
       if (best && best.url) {
         imgIdx++;
+        // _XX always right after shortcode, before title, to survive UI truncation
         files.push({
-          name: username + '_' + shortcode + titlePart + '_' + pad2(imgIdx) + '.jpg',
+          name: username + '_' + shortcode + '_' + pad2(imgIdx) + titlePart + '.jpg',
           req: {
             url: best.url,
             headers: {
@@ -50,7 +51,7 @@ gopeed.events.onResolve(async function(ctx) {
       if (best && best.url) {
         vidIdx++;
         files.push({
-          name: username + '_' + shortcode + titlePart + '_' + pad2(vidIdx) + '.mp4',
+          name: username + '_' + shortcode + '_' + pad2(vidIdx) + titlePart + '.mp4',
           req: { url: best.url }
         });
       }
@@ -58,7 +59,7 @@ gopeed.events.onResolve(async function(ctx) {
   }
   if (files.length === 1) {
     // Single file: strip the _XX suffix (wherever it appears)
-    files[0].name = files[0].name.replace(/_\d{2}(\.\w+)$/, '$1');
+    files[0].name = files[0].name.replace(/_\d{2}(_|\.)/, function(m) { return m.slice(-1); });
   }
 
   if (files.length === 0) {
