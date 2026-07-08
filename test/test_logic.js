@@ -105,7 +105,7 @@ function mapCandidates(candidates) {
 function sanitizeTitle(text) {
   if (!text) return '';
   var t = text.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-  if (t.length > 50) t = t.substring(0, 50).replace(/_+[^_]*$/, '');
+  if (t.length > 18) t = t.substring(0, 18).replace(/_+$/, '');
   return t;
 }
 

@@ -33,9 +33,9 @@ gopeed.events.onResolve(async function(ctx) {
       var best = pickBest(item.images);
       if (best && best.url) {
         imgIdx++;
-        // _XX always right after shortcode, before title, to survive UI truncation
+        // _XX at the end; title kept short for UI visibility
         files.push({
-          name: username + '_' + shortcode + '_' + pad2(imgIdx) + titlePart + '.jpg',
+          name: username + '_' + shortcode + titlePart + '_' + pad2(imgIdx) + '.jpg',
           req: {
             url: best.url,
             headers: {
@@ -51,7 +51,7 @@ gopeed.events.onResolve(async function(ctx) {
       if (best && best.url) {
         vidIdx++;
         files.push({
-          name: username + '_' + shortcode + '_' + pad2(vidIdx) + titlePart + '.mp4',
+          name: username + '_' + shortcode + titlePart + '_' + pad2(vidIdx) + '.mp4',
           req: { url: best.url }
         });
       }
@@ -59,7 +59,7 @@ gopeed.events.onResolve(async function(ctx) {
   }
   if (files.length === 1) {
     // Single file: strip the _XX suffix (wherever it appears)
-    files[0].name = files[0].name.replace(/_\d{2}(_|\.)/, function(m) { return m.slice(-1); });
+    files[0].name = files[0].name.replace(/_\d{2}(\.\w+)$/, '$1');
   }
 
   if (files.length === 0) {
@@ -250,7 +250,9 @@ function mapCandidates(candidates) {
 function sanitizeTitle(text) {
   if (!text) return '';
   var t = text.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-  if (t.length > 50) t = t.substring(0, 50).replace(/_+[^_]*$/, '');
+  // Keep titles short so that _01 suffix is always visible in download preview.
+  // Each CJK character is visually ~2x width of Latin characters.
+  if (t.length > 18) t = t.substring(0, 18).replace(/_+$/, '');
   return t;
 }
 
